@@ -1,4 +1,4 @@
-package com.smartkids
+package com.schoolmanagementsystem
 
 import android.app.Application
 import com.facebook.react.PackageList
