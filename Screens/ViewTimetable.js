@@ -1,82 +1,85 @@
-import React, { useState, useEffect } from 'react';
-import { View, Image, StyleSheet, ActivityIndicator, Text } from 'react-native';
-import { getStorage, ref, getDownloadURL } from 'firebase/storage';
+import React, { useEffect, useState } from 'react';
+import { View, StyleSheet, Image } from 'react-native';
+import { Text, Provider as PaperProvider } from 'react-native-paper';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
-import { app } from '../firebaseConfig'; // Import the initialized Firebase app
+import { app } from '../firebaseConfig';
 
-const storage = getStorage(app); // Get Firebase Storage instance
-const db = getFirestore(app); // Get Firestore instance
+const db = getFirestore(app);
 
 const ViewTimetable = () => {
-  const [timetableURL, setTimetableURL] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [timetableURL, setTimetableURL] = useState('');
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    fetchTimetableURL();
+    fetchTimetable();
   }, []);
 
-  const fetchTimetableURL = async () => {
+  const fetchTimetable = async () => {
     try {
-      const docRef = doc(db, 'timetables', 'currentTimetable');
+      const docRef = doc(db, 'timetable', 'all_classes');
       const docSnap = await getDoc(docRef);
       if (docSnap.exists()) {
-        const storageRef = ref(storage, docSnap.data().url);
-        const downloadURL = await getDownloadURL(storageRef);
-        setTimetableURL(downloadURL);
+        setTimetableURL(docSnap.data().url || '');
       } else {
-        setError('No timetable found');
+        setTimetableURL('');
       }
     } catch (error) {
-      setError('Error fetching timetable URL');
-      console.error('Error fetching timetable URL:', error);
-    } finally {
-      setLoading(false);
+      console.log('Error fetching timetable:', error.message);
+      setError('Error fetching timetable: ' + error.message);
     }
   };
 
-  if (loading) {
-    return (
-      <View style={styles.container}>
-        <ActivityIndicator size="large" color="#0000ff" />
-      </View>
-    );
-  }
-
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>View Timetable</Text>
-      {error ? (
-        <Text style={styles.error}>{error}</Text>
-      ) : timetableURL ? (
-        <Image source={{ uri: timetableURL }} style={styles.image} />
-      ) : (
-        <Text>No timetable available</Text>
-      )}
-    </View>
+    <PaperProvider>
+      <View style={styles.container}>
+        <Text style={styles.header}>View Timetable</Text>
+        {error ? <Text style={styles.errorText}>{error}</Text> : null}
+        {timetableURL ? (
+          <View style={styles.timetableContainer}>
+            <Image source={{ uri: timetableURL }} style={styles.image} />
+          </View>
+        ) : (
+          <Text style={styles.noTimetableText}>No timetable uploaded</Text>
+        )}
+      </View>
+    </PaperProvider>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: '#F5FCFF',
+    padding: 20,
+    backgroundColor: '#f8f9fa',
   },
-  title: {
+  header: {
     fontSize: 24,
+    fontWeight: 'bold',
     marginBottom: 20,
     textAlign: 'center',
   },
-  image: {
-    width: 300,
-    height: 300,
-    marginTop: 20,
+  timetableContainer: {
+    marginBottom: 15,
+    padding: 10,
+    backgroundColor: '#E2E2E2',
+    borderRadius: 10,
   },
-  error: {
+  image: {
+    width: '100%',
+    height: 200,
+    borderRadius: 10,
+    marginTop: 10,
+  },
+  errorText: {
     color: 'red',
+    marginBottom: 15,
     textAlign: 'center',
+  },
+  noTimetableText: {
+    fontSize: 18,
+    color: '#333333',
+    textAlign: 'center',
+    marginTop: 20,
   },
 });
 

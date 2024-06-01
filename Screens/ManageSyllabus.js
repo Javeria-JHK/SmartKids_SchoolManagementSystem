@@ -1,33 +1,37 @@
 import React, { useState, useEffect } from 'react';
-import { View, Button, Image, StyleSheet, Alert, TextInput, ScrollView } from 'react-native';
+import { View, Button, Image, Text, StyleSheet, Alert, ScrollView } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
 import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
-import { getFirestore, doc, getDoc, setDoc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
-import { app } from '../firebaseConfig'; // Import the initialized Firebase app
-import { getAuth } from 'firebase/auth';
+import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
+import { useTheme, FAB, Portal, Provider as PaperProvider, Modal, TextInput } from 'react-native-paper';
+import { app } from '../firebaseConfig';
+import { useNavigation } from '@react-navigation/native';
 
-const storage = getStorage(app); // Get Firebase Storage instance
-const db = getFirestore(app); // Get Firestore instance
-const auth = getAuth(app); // Get Firebase Auth instance
+const storage = getStorage(app);
+const db = getFirestore(app);
 
 const ManageSyllabus = () => {
-    const [syllabusURLs, setSyllabusURLs] = useState([]);
+    const [syllabusURL, setSyllabusURL] = useState('');
     const [className, setClassName] = useState('');
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const theme = useTheme();
+    const navigation = useNavigation();
 
     useEffect(() => {
         fetchSyllabus();
-    }, [className]);
+    }, []);
 
     const fetchSyllabus = async () => {
-        if (!className) return;
-
         try {
+            if (!className) {
+                return;
+            }
             const docRef = doc(db, 'syllabus', className);
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
-                setSyllabusURLs(docSnap.data().urls || []);
+                setSyllabusURL(docSnap.data().url || '');
             } else {
-                setSyllabusURLs([]);
+                setSyllabusURL('');
             }
         } catch (error) {
             console.log('Error fetching syllabus:', error.message);
@@ -35,128 +39,144 @@ const ManageSyllabus = () => {
     };
 
     const handleUploadSyllabus = async () => {
-        if (!className) {
-            Alert.alert('Error', 'Please enter a class name');
-            return;
-        }
-
         try {
             const result = await launchImageLibrary({
                 mediaType: 'photo',
                 includeBase64: false,
             });
 
-            if (result.didCancel) {
-                console.log('User cancelled image picker');
-                return; // Exit function if the user cancels
-            } else if (result.error) {
-                console.log('ImagePicker Error: ', result.error);
-                return; // Exit function if there's an error
-            }
+            if (!result.didCancel && !result.error && result.assets && result.assets.length > 0) {
+                const source = result.assets[0].uri;
 
-            const source = result.assets[0].uri;
-            console.log('Image URI: ', source);
+                if (!source) {
+                    throw new Error('Selected image source is null');
+                }
 
-            const response = await fetch(source);
-            const blob = await response.blob();
+                const response = await fetch(source);
+                const blob = await response.blob();
+                const filename = `${Date.now()}-${result.assets[0].fileName}`;
+                const storageRef = ref(storage, `syllabus/${filename}`);
+                await uploadBytes(storageRef, blob);
+                const downloadURL = await getDownloadURL(storageRef);
 
-            const filename = `syllabus_${Date.now()}.jpg`;
-            const storageRef = ref(storage, `syllabus/${className}/${filename}`);
-            await uploadBytes(storageRef, blob);
+                const docRef = doc(db, 'syllabus', className);
+                await setDoc(docRef, { url: downloadURL }, { merge: true });
 
-            const downloadURL = await getDownloadURL(storageRef);
-
-            const docRef = doc(db, 'syllabus', className);
-            const docSnap = await getDoc(docRef);
-
-            if (docSnap.exists()) {
-                // If the document exists, update it with the new URL
-                await updateDoc(docRef, {
-                    urls: arrayUnion(downloadURL)
-                });
+                setSyllabusURL(downloadURL);
+                setIsModalVisible(false);
+                Alert.alert('Success', 'Syllabus uploaded successfully');
             } else {
-                // If the document doesn't exist, create a new document
-                await setDoc(docRef, { urls: [downloadURL] });
+                throw new Error('Failed to select an image');
             }
-
-            fetchSyllabus();
-            Alert.alert('Success', 'Syllabus uploaded successfully');
         } catch (error) {
+            console.error('Error uploading syllabus:', error);
             Alert.alert('Error', 'Failed to upload syllabus: ' + error.message);
         }
     };
 
-    const handleRemoveSyllabus = async (url) => {
-        if (!className) {
-            Alert.alert('Error', 'Please enter a class name');
-            return;
-        }
-
+    const handleRemoveSyllabus = async () => {
         try {
-            const filename = url.split('/').pop();
-            const storageRef = ref(storage, `syllabus/${className}/${filename}`);
-            await deleteObject(storageRef);
+            if (!syllabusURL) {
+                throw new Error('No syllabus URL found');
+            }
 
-            const docRef = doc(db, 'syllabus', className);
-            await updateDoc(docRef, {
-                urls: arrayRemove(url)
+            const filename = syllabusURL.split('/').pop().split('?')[0];
+            if (!filename) {
+                throw new Error('Invalid file path');
+            }
+
+            const storageRef = ref(storage, `syllabus/${filename}`);
+            await deleteObject(storageRef).catch(error => {
+                if (error.code === 'storage/object-not-found') {
+                    console.log('File does not exist, skipping delete.');
+                } else {
+                    throw error;
+                }
             });
 
-            fetchSyllabus();
+            const docRef = doc(db, 'syllabus', className);
+            await deleteDoc(docRef);
+
+            setSyllabusURL('');
             Alert.alert('Success', 'Syllabus removed successfully');
         } catch (error) {
+            console.error('Error removing syllabus:', error);
             Alert.alert('Error', 'Failed to remove syllabus: ' + error.message);
         }
     };
 
     return (
-        <View style={styles.container}>
-            <TextInput
-                style={styles.input}
-                placeholder="Enter class name"
-                value={className}
-                onChangeText={setClassName}
-            />
-            <Button title="Upload Syllabus" onPress={handleUploadSyllabus} />
-            <ScrollView style={styles.scrollContainer}>
-                {syllabusURLs.map((url, index) => (
-                    <View key={index} style={styles.imageContainer}>
-                        <Image source={{ uri: url }} style={styles.image} />
-                        <Button title="Remove" onPress={() => handleRemoveSyllabus(url)} />
+        <PaperProvider theme={theme}>
+            <ScrollView contentContainerStyle={styles.container}>
+                <TextInput
+                    style={styles.input}
+                    label="Enter class name"
+                    value={className}
+                    onChangeText={(text) => {
+                        setClassName(text);
+                        setSyllabusURL('');
+                    }}
+                />
+                <FAB
+                    style={styles.fab}
+                    icon="plus"
+                    onPress={() => setIsModalVisible(true)}
+                />
+                <Portal>
+                    <Modal visible={isModalVisible} onDismiss={() => setIsModalVisible(false)}>
+                        <View style={styles.modalContent}>
+                            <Button title="Upload Syllabus" onPress={handleUploadSyllabus} />
+                        </View>
+                    </Modal>
+                </Portal>
+                {syllabusURL ? (
+                    <View style={styles.imageContainer}>
+                        <Image source={{ uri: syllabusURL }} style={styles.image} />
+                        <Button title="Remove" onPress={handleRemoveSyllabus} />
                     </View>
-                ))}
+                ) : (
+                    <Text style={styles.noSyllabusText}>No syllabus uploaded</Text>
+                )}
             </ScrollView>
-        </View>
+        </PaperProvider>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
-        flex: 1,
-        justifyContent: 'center',
+        flexGrow: 1,
         alignItems: 'center',
-        backgroundColor: '#F5FCFF',
-        padding: 16,
+        backgroundColor: '#ffffff',
+        paddingVertical: 20,
     },
     input: {
-        height: 40,
-        borderColor: 'gray',
-        borderWidth: 1,
         marginBottom: 20,
-        paddingHorizontal: 10,
         width: '80%',
     },
-    scrollContainer: {
-        width: '100%',
-        marginTop: 20,
+    fab: {
+        position: 'absolute',
+        margin: 16,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#475D8C',
+    },
+    modalContent: {
+        backgroundColor: '#ffffff',
+        padding: 20,
+        borderRadius: 10,
     },
     imageContainer: {
-        marginBottom: 20,
         alignItems: 'center',
     },
     image: {
         width: 300,
         height: 300,
+    },
+    noSyllabusText: {
+        fontSize: 18,
+        color: '#333333',
+        textAlign: 'center',
+        marginTop: 20,
     },
 });
 

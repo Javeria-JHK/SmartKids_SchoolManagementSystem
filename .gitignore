@@ -26,6 +26,9 @@ DerivedData
 
 # Android/IntelliJ
 #
+/Android/app/build/
+/ios/
+/ios/Pods
 build/
 .idea
 .gradle
@@ -41,7 +44,12 @@ local.properties
 node_modules/
 npm-debug.log
 yarn-error.log
+*.vscode/
 
+#log files
+*.log
+
+.env
 # fastlane
 #
 # It is recommended to not store the screenshots in the git repo. Instead, use fastlane to re-generate the
@@ -66,6 +74,7 @@ yarn-error.log
 
 # testing
 /coverage
+/_tests_/
 
 # Yarn
 .yarn/*

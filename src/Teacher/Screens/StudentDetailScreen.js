@@ -1,3 +1,4 @@
+//Javeria
 import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Modal } from 'react-native';
 import { useRoute, useNavigation } from '@react-navigation/native';
@@ -5,6 +6,7 @@ import Icon from 'react-native-vector-icons/MaterialIcons';
 import { Text, TextInput, Button } from 'react-native-paper';
 import { doc, getDoc, updateDoc, deleteField, collection, getDocs } from 'firebase/firestore';
 import { firestore } from '../../../firebaseConfig';
+import { HeaderBackButton } from '@react-navigation/stack';
 
 const StudentDetailScreen = () => {
   const route = useRoute();
@@ -18,6 +20,8 @@ const StudentDetailScreen = () => {
   const [obtainedMarks, setObtainedMarks] = useState('');
   const [totalMarks, setTotalMarks] = useState('');
   const [currentTerm, setCurrentTerm] = useState('');
+
+
 
   useEffect(() => {
     const fetchMarks = async () => {

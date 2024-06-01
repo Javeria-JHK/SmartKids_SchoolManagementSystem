@@ -1,3 +1,4 @@
+//Javeria
 import React from 'react';
 import { View, Text, Button, StyleSheet, ScrollView } from 'react-native';
 import { auth } from '../firebaseConfig'; // Ensure this path is correct

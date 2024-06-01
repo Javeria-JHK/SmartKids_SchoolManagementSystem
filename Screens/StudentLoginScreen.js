@@ -1,80 +1,63 @@
+//Ayesha
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, StyleSheet, Alert } from 'react-native';
-import { getDocs, query, collection, where } from 'firebase/firestore';
-import { db } from '../firebaseConfig';
+import { View, StyleSheet } from 'react-native';
+import { TextInput, Button, Text, Provider as PaperProvider } from 'react-native-paper';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { useNavigation } from '@react-navigation/native';
+import { signInWithEmailAndPassword } from 'firebase/auth';
+import { firestore, auth } from '../firebaseConfig';
 
-const StudentLoginScreen = ({ navigation }) => {
-    const [registrationNumber, setRegistrationNumber] = useState('');
+const StudentLoginScreen = () => {
+    const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
-    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
+    const navigation = useNavigation();
 
     const handleLogin = async () => {
-        setLoading(true);
         try {
-            // Validate registration number
-            const parsedRegNumber = parseInt(registrationNumber);
-            if (isNaN(parsedRegNumber)) {
-                setLoading(false);
-                Alert.alert('Error', 'Invalid registration number format');
-                return;
-            }
+            const userCredential = await signInWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
 
-            // Retrieve student data from Firebase
-            const studentRef = collection(db, 'students');
-            const q = query(studentRef, where('registrationNumber', '==', parsedRegNumber));
+            const q = query(collection(firestore, 'students'), where('email', '==', email));
             const querySnapshot = await getDocs(q);
 
-            // Check if student exists
             if (!querySnapshot.empty) {
-                let studentData = null;
-                querySnapshot.forEach((doc) => {
-                    studentData = doc.data();
-                });
-
-                // Verify password
-                if (studentData && studentData.password === password) {
-                    setLoading(false);
-                    navigation.navigate('StudentDashboard', { studentData });
-                } else {
-                    setLoading(false);
-                    Alert.alert('Error', 'Invalid password');
-                }
+                const studentData = querySnapshot.docs[0].data(); // Assuming the first document is the correct one
+                setEmail("");
+                setPassword("");
+                navigation.navigate('StudentPortal', { studentData });
             } else {
-                setLoading(false);
-                Alert.alert('Error', 'Student not found');
+                setError('No Authorization');
             }
         } catch (error) {
-            setLoading(false);
-            Alert.alert('Error', 'An error occurred. Please try again later.');
-            console.error('Error fetching student data:', error);
+            console.error('Login Error:', error);
+            setError('Invalid Email or Password');
         }
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Student Login</Text>
-            <TextInput
-                style={styles.input}
-                placeholder="Registration Number"
-                value={registrationNumber}
-                onChangeText={setRegistrationNumber}
-                keyboardType="numeric"
-                autoCapitalize="none"
-            />
-
-            <TextInput
-                style={styles.input}
-                placeholder="Password"
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-            />
-            <Button
-                title={loading ? 'Logging in...' : 'Login'}
-                onPress={handleLogin}
-                disabled={loading}
-            />
-        </View>
+        <PaperProvider>
+            <View style={styles.container}>
+                <Text style={styles.header}>Student Login</Text>
+                <TextInput
+                    label="Email"
+                    value={email}
+                    onChangeText={setEmail}
+                    style={styles.input}
+                />
+                <TextInput
+                    label="Password"
+                    value={password}
+                    onChangeText={setPassword}
+                    style={styles.input}
+                    secureTextEntry
+                />
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                <Button mode="contained" onPress={handleLogin} style={styles.loginButton}>
+                    Login
+                </Button>
+            </View>
+        </PaperProvider>
     );
 };
 
@@ -83,18 +66,27 @@ const styles = StyleSheet.create({
         flex: 1,
         justifyContent: 'center',
         padding: 20,
+        backgroundColor: '#f8f9fa',
     },
-    title: {
+    header: {
         fontSize: 24,
+        fontWeight: 'bold',
         marginBottom: 20,
         textAlign: 'center',
     },
     input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        padding: 10,
-        marginBottom: 10,
-        borderRadius: 5,
+        marginBottom: 15,
+        backgroundColor: '#E2E2E2',
+    },
+    loginButton: {
+        marginTop: 20,
+        backgroundColor: '#475D8C',
+        borderRadius: 15,
+    },
+    errorText: {
+        color: 'red',
+        marginTop: 10,
+        textAlign: 'center',
     },
 });
 

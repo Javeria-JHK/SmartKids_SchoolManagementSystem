@@ -1,5 +1,7 @@
+//Javeria
 import React, { useState, useEffect } from 'react';
-import { View, StyleSheet, ScrollView, Text, Button, Alert } from 'react-native';
+import { View, StyleSheet, ScrollView, Text, Alert } from 'react-native';
+import {Button} from 'react-native-paper';
 import { collection, getDocs, limit, orderBy ,query} from 'firebase/firestore';
 import { firestore } from '../firebaseConfig';
 import RNHTMLtoPDF from 'react-native-html-to-pdf';
@@ -17,7 +19,7 @@ const ViewReportsScreen = () => {
   useEffect(() => {
     const fetchStudents = async () => {
       try {
-        const q = query(collection(firestore, 'students'), orderBy('registrationNumber'), limit(10));
+        const q = query(collection(firestore, 'students'), orderBy('registrationNumber'), limit(15));
         const querySnapshot = await getDocs(q);
       
         let boys = 0;
@@ -28,7 +30,7 @@ const ViewReportsScreen = () => {
          
           student.dateOfBirth= doc.data().dateOfBirth.toDate(); // Convert Firestore Timestamp to JavaScript Date
           student.dateOfAdmission= doc.data().dateOfAdmission.toDate(); // Convert Firestore Timestamp to JavaScript Date
-          const age = calculateAge(birthDate);
+          const age = calculateAge(student.dateOfBirth);
           student.age = age;
           studentsList.push(student);
           if (student.gender === 'male') boys += 1;
@@ -139,7 +141,7 @@ const ViewReportsScreen = () => {
       </View>
       <Text style={styles.summary}>Total Boys: {boysCount}</Text>
       <Text style={styles.summary}>Total Girls: {girlsCount}</Text>
-      <Button title="Download PDF" onPress={generatePDF} />
+      <Button mode="contained" style={styles.button} onPress={generatePDF}>Download PDF</Button> 
     </ScrollView>
   );
 };
@@ -190,6 +192,10 @@ const styles = StyleSheet.create({
     marginVertical: 10,
     textAlign: 'center',
   },
+  button:{
+    backgroundColor:'#475D8C',
+   
+  }
 });
 
 export default ViewReportsScreen;

@@ -1,4 +1,4 @@
-// src/Teacher/Screens/EditMarksScreen.js
+//Javeria
 import React, { useState } from 'react';
 import { View, StyleSheet, Modal, TouchableOpacity } from 'react-native';
 import { Text, TextInput, Button} from 'react-native-paper';

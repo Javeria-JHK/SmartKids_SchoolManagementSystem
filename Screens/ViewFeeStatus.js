@@ -1,91 +1,55 @@
+//Ayesha
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, Alert, ScrollView, FlatList } from 'react-native';
-import { db } from '../firebaseConfig';
-import { doc, getDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { View, StyleSheet } from 'react-native';
+import { useRoute, useNavigation } from '@react-navigation/native';
+import { Text, PaperProvider } from 'react-native-paper';
+import { query, where, collection, getDocs } from 'firebase/firestore';
+import { firestore } from '../firebaseConfig';
 
-const StudentFeeStatus = () => {
-    const [feeStatus, setFeeStatus] = useState(null);
-    const [paymentHistory, setPaymentHistory] = useState([]);
-    const [loading, setLoading] = useState(true);
+const ViewFeeStatus = () => {
+
+
+    const [error, setError] = useState('');
+    const [feeDocs, setFeeDocs] = useState([]);
 
     useEffect(() => {
         const fetchFeeStatus = async () => {
-            const auth = getAuth();
-            const user = auth.currentUser;
+            try {
+                const q = query(collection(firestore, 'feeStatus'));
+                const querySnapshot = await getDocs(q);
 
-            if (user) {
-                console.log('Current User UID:', user.uid); // Debugging line to check UID
-                try {
-                    const studentDocRef = doc(db, 'students', user.uid);
-                    const studentDoc = await getDoc(studentDocRef);
-
-                    if (studentDoc.exists()) {
-                        const data = studentDoc.data();
-                        setFeeStatus(data.feeStatus || {});
-                        setPaymentHistory(data.paymentHistory || []);
-                    } else {
-                        Alert.alert('Error', 'Student data not found');
-                    }
-                } catch (error) {
-                    Alert.alert('Error', error.message);
-                } finally {
-                    setLoading(false);
+                if (!querySnapshot.empty) {
+                    const fetchedFees = querySnapshot.docs.map(doc => doc.data());
+                    setFeeDocs(fetchedFees);
+                } else {
+                    setError('No fee Chalan');
                 }
-            } else {
-                setLoading(false);
-                Alert.alert('Error', 'User not authenticated');
+            } catch (error) {
+                console.error('Error fetching fee status:', error);
+                setError('Error fetching fee status');
             }
         };
 
         fetchFeeStatus();
     }, []);
 
-    if (loading) {
-        return (
-            <View style={styles.container}>
-                <Text>Loading...</Text>
-            </View>
-        );
-    }
-
-    if (!feeStatus) {
-        return (
-            <View style={styles.container}>
-                <Text>No fee status available</Text>
-            </View>
-        );
-    }
-
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Fee Status</Text>
-            <ScrollView>
-                <View style={styles.statusItem}>
-                    <Text>Registration Number: {feeStatus.registrationNumber}</Text>
-                    <Text>Name: {feeStatus.name}</Text>
-                    <Text>Amount Due: {feeStatus.amountDue}</Text>
-                    <Text>Amount Paid: {feeStatus.amountPaid}</Text>
-                    <Text>Payable Amount: {feeStatus.payableAmount}</Text>
-                    <Text>Payment Date: {feeStatus.paymentDate}</Text>
-                    <Text>Late Fees: {feeStatus.lateFees}</Text>
-                    <Text>Remarks: {feeStatus.remarks}</Text>
-                </View>
-            </ScrollView>
-
-            <Text style={styles.title}>Payment History</Text>
-            <FlatList
-                data={paymentHistory}
-                keyExtractor={(item, index) => index.toString()}
-                renderItem={({ item }) => (
-                    <View style={styles.paymentItem}>
-                        <Text>Date: {item.date}</Text>
-                        <Text>Amount: {item.amount}</Text>
-                        <Text>Status: {item.status}</Text>
+        <PaperProvider>
+            <View style={styles.container}>
+                <Text style={styles.header}>View Fee Status</Text>
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+                {feeDocs.map((fee, index) => (
+                    <View key={index} style={styles.feeContainer}>
+                        <Text>Amount Due: {fee.amountDue}</Text>
+                        <Text>Amount Paid: {fee.amountPaid}</Text>
+                        <Text>Late Fees: {fee.lateFees?fee.lateFees:'No'}</Text>
+                        <Text>Payable Amount: {fee.payableAmount}</Text>
+                        <Text>Payment Date: {fee.paymentDate}</Text>
+                        <Text>Remarks: {fee.remarks}</Text>
                     </View>
-                )}
-            />
-        </View>
+                ))}
+            </View>
+        </PaperProvider>
     );
 };
 
@@ -93,22 +57,25 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 20,
+        backgroundColor: '#f8f9fa',
     },
-    title: {
+    header: {
         fontSize: 24,
+        fontWeight: 'bold',
         marginBottom: 20,
         textAlign: 'center',
     },
-    statusItem: {
+    feeContainer: {
         padding: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#ccc',
+        backgroundColor: '#E2E2E2',
+        borderRadius: 10,
+        marginBottom: 15,
     },
-    paymentItem: {
-        padding: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#ccc',
+    errorText: {
+        color: 'red',
+        marginBottom: 15,
+        textAlign: 'center',
     },
 });
 
-export default StudentFeeStatus;
+export default ViewFeeStatus;

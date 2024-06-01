@@ -1,3 +1,5 @@
+//Ayesha
+
 import React from 'react';
 import { View, StyleSheet, Image, TouchableOpacity } from 'react-native';
 import { Text, Button, Provider as PaperProvider } from 'react-native-paper';
@@ -6,9 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 const MainLoginScreen = () => {
   const navigation = useNavigation();
 
-  const handleLogin = (role) => {
-    navigation.navigate(`${role}LoginScreen`);
-  };
+
 
   return (
     <PaperProvider>
@@ -22,7 +22,7 @@ const MainLoginScreen = () => {
         <View style={styles.buttonContainer}>
           <Button
             mode="contained"
-            onPress={() => handleLogin('Admin')}
+            onPress={() =>  navigation.navigate('AdminLoginScreen')}
             style={styles.loginButton}
             labelStyle={styles.buttonText}
           >
@@ -30,7 +30,7 @@ const MainLoginScreen = () => {
           </Button>
           <Button
             mode="contained"
-            onPress={() => handleLogin('Teacher')}
+            onPress={() =>  navigation.navigate('TeacherLoginScreen')}
             style={styles.loginButton}
             labelStyle={styles.buttonText}
           >
@@ -38,7 +38,7 @@ const MainLoginScreen = () => {
           </Button>
           <Button
             mode="contained"
-            onPress={() => handleLogin('Student')}
+            onPress={() =>  navigation.navigate('StudentLoginScreen')}
             style={styles.loginButton}
             labelStyle={styles.buttonText}
           >

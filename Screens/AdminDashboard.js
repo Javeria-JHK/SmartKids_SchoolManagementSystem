@@ -1,10 +1,11 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+//Javeria
+import React, { useState, useEffect, useMemo, useRef ,useCallback } from 'react';
 import {
-  View, ScrollView, FlatList, TouchableOpacity, StyleSheet, StatusBar, Text, DrawerLayoutAndroid,
+View, ScrollView, FlatList, TouchableOpacity, StyleSheet, StatusBar, Text, DrawerLayoutAndroid,
 } from 'react-native';
 import { collection, getDocs, query, limit, orderBy } from 'firebase/firestore';
 import { firestore, auth } from '../firebaseConfig';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation ,useFocusEffect } from '@react-navigation/native';
 import { Searchbar, Drawer, Button, Appbar } from 'react-native-paper';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 
@@ -15,11 +16,20 @@ const AdminDashboard = () => {
   const [active, setActive] = useState('Dashboard');
   const drawer = useRef(null);
   const navigation = useNavigation();
+  const drawerRef = useRef(null);
+
+
+  useFocusEffect(
+    useCallback(() => {
+      setActive(null); // Reset active state when this screen is focused
+    
+    }, [])
+  );
 
   useEffect(() => {
     const fetchStudents = async () => {
       try {
-        const q = query(collection(firestore, 'students'),orderBy('registrationNumber'), limit(10));
+        const q = query(collection(firestore, 'students'),orderBy('registrationNumber'));
         const querySnapshot = await getDocs(q);
 
         if (querySnapshot.empty) {
@@ -84,6 +94,7 @@ const AdminDashboard = () => {
           active={active === 'Manage Students'}
           onPress={() => {
             setActive('Manage Students');
+            
             navigation.navigate('ManageStudents');
           }}
         />
@@ -92,6 +103,7 @@ const AdminDashboard = () => {
           active={active === 'Manage Teachers'}
           onPress={() => {
             setActive('Manage Teachers');
+            
             navigation.navigate('ManageTeachers');
           }}
         />
@@ -100,6 +112,7 @@ const AdminDashboard = () => {
           active={active === 'Reports'}
           onPress={() => {
             setActive('Reports');
+            
             navigation.navigate('GenerateReports');
           }}
         />
@@ -108,6 +121,7 @@ const AdminDashboard = () => {
           active={active === 'Time Table'}
           onPress={() => {
             setActive('Time Table');
+            
             navigation.navigate('ManageTimetable');
           }}
         />
@@ -115,8 +129,17 @@ const AdminDashboard = () => {
           label="Syllabus"
           active={active === 'Syllabus'}
           onPress={() => {
-            setActive('Syllabus');
+         
             navigation.navigate('ManageSyllabus');
+          }}
+        />
+        <Drawer.Item
+          label="Manage Fee"
+          active={active === 'Manage Fee'}
+          onPress={() => {
+            setActive('Manage Fee');
+          
+            navigation.navigate('ManageFeeStatus');
           }}
         />
         <Drawer.Item

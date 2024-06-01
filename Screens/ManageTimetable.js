@@ -1,62 +1,34 @@
 import React, { useState, useEffect } from 'react';
-import { View, Button, Image, StyleSheet, Alert, PermissionsAndroid, Platform } from 'react-native';
+import { View, Button, Image, Text, StyleSheet, Alert, ScrollView } from 'react-native';
 import { launchImageLibrary } from 'react-native-image-picker';
-import { getStorage, ref, uploadBytes, deleteObject, getDownloadURL } from 'firebase/storage';
-import { getFirestore, doc, setDoc, getDoc, deleteDoc } from 'firebase/firestore';
-import { app } from '../firebaseConfig'; // Import the initialized Firebase app
-import { getAuth, onAuthStateChanged } from 'firebase/auth';
+import { getStorage, ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { useTheme, FAB, Portal, Provider as PaperProvider, Modal, TextInput } from 'react-native-paper';
+import { app } from '../firebaseConfig';
+import { useNavigation } from '@react-navigation/native';
 
-const storage = getStorage(app); // Get Firebase Storage instance
-const db = getFirestore(app); // Get Firestore instance
-const auth = getAuth(app); // Get Firebase Auth instance
-
-const requestPermissions = async () => {
-    if (Platform.OS === 'android') {
-        try {
-            const granted = await PermissionsAndroid.requestMultiple([
-                PermissionsAndroid.PERMISSIONS.CAMERA,
-                PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE,
-                PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE,
-            ]);
-
-            if (
-                granted[PermissionsAndroid.PERMISSIONS.CAMERA] === PermissionsAndroid.RESULTS.GRANTED &&
-                granted[PermissionsAndroid.PERMISSIONS.READ_EXTERNAL_STORAGE] === PermissionsAndroid.RESULTS.GRANTED &&
-                granted[PermissionsAndroid.PERMISSIONS.WRITE_EXTERNAL_STORAGE] === PermissionsAndroid.RESULTS.GRANTED
-            ) {
-                console.log('You can use the camera and read/write storage');
-            } else {
-                console.log('Camera or storage permissions denied');
-            }
-        } catch (err) {
-            console.warn(err);
-        }
-    }
-};
+const storage = getStorage(app);
+const db = getFirestore(app);
 
 const ManageTimetable = () => {
-    const [timetableURI, setTimetableURI] = useState(null);
-    const [timetableURL, setTimetableURL] = useState(null);
+    const [timetableURL, setTimetableURL] = useState('');
+    const [className, setClassName] = useState('');
+    const [isModalVisible, setIsModalVisible] = useState(false);
+    const theme = useTheme();
+    const navigation = useNavigation();
 
     useEffect(() => {
-        requestPermissions();
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
-            if (user) {
-                fetchTimetable();
-            } else {
-                Alert.alert('Error', 'User not authenticated');
-            }
-        });
-
-        return () => unsubscribe();
+        fetchTimetable();
     }, []);
 
     const fetchTimetable = async () => {
         try {
-            const docRef = doc(db, 'timetables', 'currentTimetable');
+            const docRef = doc(db, 'timetable', 'all_classes');
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
-                setTimetableURL(docSnap.data().url);
+                setTimetableURL(docSnap.data().url || '');
+            } else {
+                setTimetableURL('');
             }
         } catch (error) {
             console.log('Error fetching timetable:', error.message);
@@ -70,63 +42,139 @@ const ManageTimetable = () => {
                 includeBase64: false,
             });
 
-            if (result.didCancel) {
-                console.log('User cancelled image picker');
-            } else if (result.error) {
-                console.log('ImagePicker Error: ', result.error);
-            } else {
+            if (!result.didCancel && !result.error && result.assets && result.assets.length > 0) {
                 const source = result.assets[0].uri;
-                setTimetableURI(source);
-                console.log('Image URI: ', source);
+
+                if (!source) {
+                    throw new Error('Selected image source is null');
+                }
 
                 const response = await fetch(source);
                 const blob = await response.blob();
-                const storageRef = ref(storage, `timetables/currentTimetable.jpg`);
+                const filename = `${Date.now()}-${result.assets[0].fileName}`;
+                const storageRef = ref(storage, `timetable/${filename}`);
                 await uploadBytes(storageRef, blob);
-
                 const downloadURL = await getDownloadURL(storageRef);
-                await setDoc(doc(db, 'timetables', 'currentTimetable'), { url: downloadURL });
+
+                const docRef = doc(db, 'timetable', 'all_classes');
+                await setDoc(docRef, { url: downloadURL }, { merge: true });
 
                 setTimetableURL(downloadURL);
+                setIsModalVisible(false);
                 Alert.alert('Success', 'Timetable uploaded successfully');
+            } else {
+                throw new Error('Failed to select an image');
             }
         } catch (error) {
+            console.error('Error uploading timetable:', error);
             Alert.alert('Error', 'Failed to upload timetable: ' + error.message);
         }
     };
 
     const handleRemoveTimetable = async () => {
         try {
-            const storageRef = ref(storage, `timetables/currentTimetable.jpg`);
-            await deleteObject(storageRef);
+            if (!timetableURL) {
+                throw new Error('No timetable URL found');
+            }
 
-            await deleteDoc(doc(db, 'timetables', 'currentTimetable'));
-            setTimetableURL(null);
+            // Extract filename from URL
+            const filename = timetableURL.split('/').pop().split('?')[0];
+
+            // Validate filename
+            if (!filename) {
+                throw new Error('Invalid file path');
+            }
+
+            const storageRef = ref(storage, `timetable/${filename}`);
+
+            // Attempt to delete the object if it exists
+            await deleteObject(storageRef).catch(error => {
+                if (error.code === 'storage/object-not-found') {
+                    console.log('File does not exist, skipping delete.');
+                } else {
+                    throw error;
+                }
+            });
+
+            const docRef = doc(db, 'timetable', 'all_classes');
+            await setDoc(docRef, { url: '' }, { merge: true });
+
+            setTimetableURL('');
             Alert.alert('Success', 'Timetable removed successfully');
         } catch (error) {
+            console.error('Error removing timetable:', error);
             Alert.alert('Error', 'Failed to remove timetable: ' + error.message);
         }
     };
 
     return (
-        <View style={styles.container}>
-            <Button title="Upload Timetable" onPress={handleUploadTimetable} />
-            {timetableURL && <Image source={{ uri: timetableURL }} style={styles.image} />}
-            {timetableURL && <Button title="Remove Timetable" onPress={handleRemoveTimetable} />}
-        </View>
+        <PaperProvider theme={theme}>
+            <ScrollView contentContainerStyle={styles.container}>
+                <TextInput
+                    style={styles.input}
+                    label="Enter class name"
+                    value={className}
+                    onChangeText={setClassName}
+                />
+                <FAB
+                    style={styles.fab}
+                    icon="plus"
+                    onPress={() => setIsModalVisible(true)}
+                />
+                <Portal>
+                    <Modal visible={isModalVisible} onDismiss={() => setIsModalVisible(false)}>
+                        <View style={styles.modalContent}>
+                            <Button title="Upload Timetable" onPress={handleUploadTimetable} />
+                        </View>
+                    </Modal>
+                </Portal>
+                {timetableURL ? (
+                    <View style={styles.imageContainer}>
+                        <Image source={{ uri: timetableURL }} style={styles.image} />
+                        <Button title="Remove" onPress={handleRemoveTimetable} />
+                    </View>
+                ) : (
+                    <Text style={styles.noTimetableText}>No timetable uploaded</Text>
+                )}
+            </ScrollView>
+        </PaperProvider>
     );
 };
 
 const styles = StyleSheet.create({
     container: {
-        flex: 1,
-        justifyContent: 'center',
+        flexGrow: 1,
         alignItems: 'center',
-        backgroundColor: '#F5FCFF',
+        backgroundColor: '#ffffff',
+        paddingVertical: 20,
+    },
+    input: {
+        marginBottom: 20,
+        width: '80%',
+    },
+    fab: {
+        position: 'absolute',
+        margin: 16,
+        right: 0,
+        bottom: 0,
+        backgroundColor: '#475D8C',
+    },
+    modalContent: {
+        backgroundColor: '#ffffff',
+        padding: 20,
+        borderRadius: 10,
+    },
+    imageContainer: {
+        alignItems: 'center',
     },
     image: {
         width: 300,
         height: 300,
+    },
+    noTimetableText: {
+        fontSize: 18,
+        color: '#333333',
+        textAlign: 'center',
         marginTop: 20,
     },
 });

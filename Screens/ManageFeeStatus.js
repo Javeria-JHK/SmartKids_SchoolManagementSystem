@@ -1,207 +1,154 @@
+//Ayesha
 import React, { useState, useEffect } from 'react';
-import { View, Text, TextInput, Button, FlatList, StyleSheet, Alert, ScrollView } from 'react-native';
-import { Picker } from '@react-native-picker/picker';
-import { db } from '../firebaseConfig';
-import { collection, onSnapshot, doc, updateDoc } from 'firebase/firestore';
+import { View, StyleSheet, Text } from 'react-native';
+import { TextInput, Button, Provider as PaperProvider } from 'react-native-paper';
+import { collection, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc } from 'firebase/firestore';
+import { firestore } from '../firebaseConfig';
+import { useNavigation } from '@react-navigation/native';
+import MyDatePicker from './components/MyDatePicker';
 
 const ManageFeeStatus = () => {
-    const [students, setStudents] = useState([]);
-    const [selectedStudentId, setSelectedStudentId] = useState('');
-    const [feeStatus, setFeeStatus] = useState({
-        registrationNumber: '',
-        name: '',
-        amountDue: '',
-        amountPaid: '',
-        payableAmount: '',
-        paymentDate: '',
-        lateFees: 'No',
-        remarks: '',
-    });
+    const navigation = useNavigation();
+
+    const [registration, setRegistration] = useState('');
+    const [studentName, setStudentName] = useState('');
+    const [amountDue, setAmountDue] = useState('');
+    const [amountPaid, setAmountPaid] = useState('');
+    const [payableAmount, setPayableAmount] = useState('');
+    const [paymentDate, setPaymentDate] = useState(new Date());
+    const [remarks, setRemarks] = useState('');
+    const [lateFees, setLateFees] = useState(false);
+    const [error, setError] = useState('');
+    const [feeId, setFeeId] = useState(null);
 
     useEffect(() => {
-        const unsubscribe = onSnapshot(collection(db, 'students'), snapshot => {
-            const studentsList = snapshot.docs.map(doc => ({
-                id: doc.id,
-                ...doc.data(),
-            }));
-            setStudents(studentsList);
-        });
-        return unsubscribe;
-    }, []);
-
-    const handleUpdateFeeStatus = async () => {
-        if (!selectedStudentId) {
-            Alert.alert('Please select a student.');
-            return;
+        if (feeId) {
+            fetchFeeData();
         }
+    }, [feeId]);
 
+    const fetchFeeData = async () => {
         try {
-            const studentDocRef = doc(db, 'students', selectedStudentId);
-            await updateDoc(studentDocRef, { feeStatus });
-            Alert.alert('Fee status updated successfully!');
-            setFeeStatus({
-                registrationNumber: '',
-                name: '',
-                amountDue: '',
-                amountPaid: '',
-                payableAmount: '',
-                paymentDate: '',
-                lateFees: 'No',
-                remarks: '',
-            });
-            setSelectedStudentId('');
+            const feeDoc = doc(firestore, 'feeStatus', feeId);
+            const docSnapshot = await getDoc(feeDoc);
+
+            if (docSnapshot.exists()) {
+                const feeData = docSnapshot.data();
+                setRegistration(feeData.registration);
+                setStudentName(feeData.studentName);
+                setAmountDue(feeData.amountDue);
+                setAmountPaid(feeData.amountPaid);
+                setPayableAmount(feeData.payableAmount);
+                setPaymentDate(new Date(feeData.paymentDate));
+                setRemarks(feeData.remarks);
+                setLateFees(feeData.lateFees);
+            } else {
+                setError('Fee record not found');
+            }
         } catch (error) {
-            Alert.alert(error.message);
+            console.error('Error fetching fee data:', error);
+            setError('Error fetching fee data');
         }
     };
 
-    const handleDeleteFeeStatus = async (studentId) => {
+    const handleSave = async () => {
         try {
-            const studentDocRef = doc(db, 'students', studentId);
-            await updateDoc(studentDocRef, { feeStatus: null });
-            Alert.alert('Fee status deleted successfully!');
+            const feeData = {
+                registration,
+                studentName,
+                amountDue,
+                amountPaid,
+                payableAmount,
+                paymentDate: paymentDate.toISOString(),
+                remarks,
+                lateFees,
+            };
+
+            if (feeId) {
+                await updateDoc(doc(firestore, 'feeStatus', feeId), feeData);
+            } else {
+                await addDoc(collection(firestore, 'feeStatus'), feeData);
+            }
+
+            console.log('Fee status saved:', feeData);
+            navigation.goBack();
         } catch (error) {
-            Alert.alert('Error deleting fee status: ' + error.message);
+            console.error('Error saving fee status:', error);
+            setError('Error saving fee status');
         }
     };
 
-    const handleEditFeeStatus = (studentId) => {
-        const student = students.find(student => student.id === studentId);
-        setFeeStatus({
-            registrationNumber: student.registrationNumber,
-            name: student.name,
-            amountDue: student.feeStatus?.amountDue || '',
-            amountPaid: student.feeStatus?.amountPaid || '',
-            payableAmount: student.feeStatus?.payableAmount || '',
-            paymentDate: student.feeStatus?.paymentDate || '',
-            lateFees: student.feeStatus?.lateFees || 'No',
-            remarks: student.feeStatus?.remarks || '',
-        });
-        setSelectedStudentId(studentId);
-    };
-
-    const handleViewFeeStatus = (student) => {
-        Alert.alert('Fee Status', `Registration Number: ${student.registrationNumber}\nName: ${student.name}\nAmount Due: ${student.feeStatus?.amountDue || 'N/A'}\nAmount Paid: ${student.feeStatus?.amountPaid || 'N/A'}\nPayable Amount: ${student.feeStatus?.payableAmount || 'N/A'}\nPayment Date: ${student.feeStatus?.paymentDate || 'N/A'}\nLate Fees: ${student.feeStatus?.lateFees || 'N/A'}\nRemarks: ${student.feeStatus?.remarks || 'N/A'}`);
+    const handleDelete = async () => {
+        try {
+            await deleteDoc(doc(firestore, 'feeStatus', feeId));
+            console.log('Fee status deleted');
+            navigation.goBack();
+        } catch (error) {
+            console.error('Error deleting fee status:', error);
+            setError('Error deleting fee status');
+        }
     };
 
     return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Manage Fee Status</Text>
-            <ScrollView>
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Select Registration Number</Text>
-                    <Picker
-                        selectedValue={selectedStudentId}
-                        onValueChange={(itemValue) => {
-                            setSelectedStudentId(itemValue);
-                            const selectedStudent = students.find(student => student.id === itemValue);
-                            if (selectedStudent) {
-                                setFeeStatus({
-                                    registrationNumber: selectedStudent.registrationNumber,
-                                    name: selectedStudent.name,
-                                    amountDue: selectedStudent.feeStatus?.amountDue || '',
-                                    amountPaid: selectedStudent.feeStatus?.amountPaid || '',
-                                    payableAmount: selectedStudent.feeStatus?.payableAmount || '',
-                                    paymentDate: selectedStudent.feeStatus?.paymentDate || '',
-                                    lateFees: selectedStudent.feeStatus?.lateFees || 'No',
-                                    remarks: selectedStudent.feeStatus?.remarks || '',
-                                });
-                            }
-                        }}
-                    >
-                        <Picker.Item label="Select Registration Number" value="" />
-                        {students.map((student) => (
-                            <Picker.Item key={student.id} label={`${student.registrationNumber} - ${student.name}`} value={student.id} />
-                        ))}
-                    </Picker>
-                </View>
-                <TextInput style={styles.input}
-                    placeholder="Registration Number"
-                    value={feeStatus.registrationNumber.toString()}
-                    onChangeText={(text) => setFeeStatus({ ...feeStatus, registrationNumber: text })}
-                    keyboardType="numeric"
-                    editable={false} // Disable input for registration number
+        <PaperProvider>
+            <View style={styles.container}>
+                <Text style={styles.header}>Manage Fee Status</Text>
+                <TextInput
+                    label="Registration"
+                    value={registration}
+                    onChangeText={text => setRegistration(text)}
+                    style={styles.input}
+                    editable={!feeId}
                 />
                 <TextInput
+                    label="Student Name"
+                    value={studentName}
+                    onChangeText={text => setStudentName(text)}
                     style={styles.input}
-                    placeholder="Student Name"
-                    value={feeStatus.name}
-                    onChangeText={(text) => setFeeStatus({ ...feeStatus, name: text })}
                 />
                 <TextInput
+                    label="Amount Due"
+                    value={amountDue}
+                    onChangeText={text => setAmountDue(text)}
                     style={styles.input}
-                    placeholder="Amount Due"
-                    value={feeStatus.amountDue}
-                    onChangeText={(text) => setFeeStatus({ ...feeStatus, amountDue: text })}
                     keyboardType="numeric"
                 />
                 <TextInput
+                    label="Amount Paid"
+                    value={amountPaid}
+                    onChangeText={text => setAmountPaid(text)}
                     style={styles.input}
-                    placeholder="Amount Paid"
-                    value={feeStatus.amountPaid}
-                    onChangeText={(text) => setFeeStatus({ ...feeStatus, amountPaid: text })}
                     keyboardType="numeric"
                 />
                 <TextInput
+                    label="Payable Amount"
+                    value={payableAmount}
+                    onChangeText={text => setPayableAmount(text)}
                     style={styles.input}
-                    placeholder="Payable Amount"
-                    value={feeStatus.payableAmount}
-                    onChangeText={(text) => setFeeStatus({ ...feeStatus, payableAmount: text })}
                     keyboardType="numeric"
                 />
-                <TextInput
-                    style={styles.input}
-                    placeholder="Payment Date"
-                    value={feeStatus.paymentDate}
-                    onChangeText={(text) => setFeeStatus({ ...feeStatus, paymentDate: text })}
+                <MyDatePicker
+                    label="Payment Date"
+                    date={paymentDate}
+                    onChange={date => setPaymentDate(date)}
                 />
-                <View style={styles.inputContainer}>
-                    <Text style={styles.label}>Late Fees</Text>
-                    <View style={styles.inputWrapper}>
-                        <Picker
-                            style={styles.picker}
-                            selectedValue={feeStatus.lateFees}
-                            onValueChange={(itemValue) => setFeeStatus({ ...feeStatus, lateFees: itemValue })}
-                        >
-                            <Picker.Item label="No" value="No" />
-                            <Picker.Item label="Yes" value="Yes" />
-                        </Picker>
-                    </View>
-                </View>
-
                 <TextInput
+                    label="Remarks"
+                    value={remarks}
+                    onChangeText={text => setRemarks(text)}
                     style={styles.input}
-                    placeholder="Remarks"
-                    value={feeStatus.remarks}
-                    onChangeText={(text) => setFeeStatus({ ...feeStatus, remarks: text })}
                 />
-                <Button title="Update Fee Status" onPress={handleUpdateFeeStatus} />
-            </ScrollView>
-
-            <FlatList
-                data={students}
-                keyExtractor={(item) => item.id}
-                renderItem={({ item }) => (
-                    <View style={styles.studentItem}>
-                        <View style={styles.studentInfo}>
-                            <Text>Registration Number: {item.registrationNumber}</Text>
-                            <Text>Name: {item.name}</Text>
-                            <Text>Amount Due: {item.feeStatus?.amountDue || 'N/A'}</Text>
-                            <Text>Amount Paid: {item.feeStatus?.amountPaid || 'N/A'}</Text>
-                            <Text>Payable Amount: {item.feeStatus?.payableAmount || 'N/A'}</Text>
-                            <Text>Payment Date: {item.feeStatus?.paymentDate || 'N/A'}</Text>
-                            <Text>Late Fees: {item.feeStatus?.lateFees || 'N/A'}</Text>
-                            <Text>Remarks: {item.feeStatus?.remarks || 'N/A'}</Text>
-                        </View>
-                        <View style={styles.buttonContainer}>
-                            <Button title="View" onPress={() => handleViewFeeStatus(item)} />
-                            <Button title="Edit" onPress={() => handleEditFeeStatus(item.id)} />
-                            <Button title="Delete" onPress={() => handleDeleteFeeStatus(item.id)} />
-                        </View>
-                    </View>
+                <Button mode="contained" onPress={handleSave} style={styles.saveButton}>
+                    Save
+                </Button>
+                {feeId && (
+                    <Button mode="contained" onPress={handleDelete} style={[styles.saveButton, styles.deleteButton]}>
+                        Delete
+                    </Button>
                 )}
-            />
-        </View>
+                {error ? <Text style={styles.errorText}>{error}</Text> : null}
+            </View>
+        </PaperProvider>
     );
 };
 
@@ -209,55 +156,31 @@ const styles = StyleSheet.create({
     container: {
         flex: 1,
         padding: 20,
+        backgroundColor: '#f8f9fa',
     },
-    title: {
+    header: {
         fontSize: 24,
+        fontWeight: 'bold',
         marginBottom: 20,
         textAlign: 'center',
     },
-    inputContainer: {
-        marginBottom: 10,
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 5,
-    },
     input: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        padding: 10,
-        marginBottom: 10,
-        borderRadius: 5,
+        marginBottom: 15,
+        backgroundColor: '#E2E2E2',
     },
-    label: {
-        fontSize: 16,
-        marginBottom: 5,
+    saveButton: {
+        marginTop: 20,
+        backgroundColor: '#475D8C',
+        borderRadius: 15,
     },
-    inputWrapper: {
-        borderWidth: 1,
-        borderColor: '#ccc',
-        borderRadius: 5,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        paddingHorizontal: 10,
-    },
-    picker: {
-        flex: 1,
-    },
-    studentItem: {
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        padding: 10,
-        borderBottomWidth: 1,
-        borderBottomColor: '#ccc',
-    },
-    studentInfo: {
-        flex: 1,
-    },
-    buttonContainer: {
-        flexDirection: 'row',
-        justifyContent: 'space-between',
+    deleteButton: {
         marginTop: 10,
+        backgroundColor: '#FF6347',
+    },
+    errorText: {
+        color: 'red',
+        marginTop: 10,
+        textAlign: 'center',
     },
 });
 

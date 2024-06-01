@@ -1,68 +1,128 @@
+//Javeria
 import React, { useState, useEffect } from 'react';
-import { View, Text, Button, StyleSheet, FlatList, Picker } from 'react-native';
-import { firestore } from '../firebaseConfig';
+import { ScrollView, StyleSheet, Alert } from 'react-native';
+import { Provider as PaperProvider, List, Text } from 'react-native-paper';
+import { getFirestore, collection, doc, getDocs, updateDoc } from 'firebase/firestore';
+import { app } from '../firebaseConfig';
+import { getAuth, onAuthStateChanged } from 'firebase/auth';
+
+const firestore = getFirestore(app);
 
 const ManageTeachers = () => {
-    const [teachers, setTeachers] = useState([]);
-    const [classes, setClasses] = useState([]);
-    const [selectedTeacher, setSelectedTeacher] = useState('');
-    const [selectedClass, setSelectedClass] = useState('');
+  const [teachers, setTeachers] = useState([]);
+  const [expandedTeacher, setExpandedTeacher] = useState(null);
+  const [user, setUser] = useState(null);
 
-    useEffect(() => {
-        const fetchTeachers = async () => {
-            const teacherDocs = await firestore().collection('teachers').get();
-            setTeachers(teacherDocs.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-        };
+  const classes = ['Nursery', 'Prep', 'class1', 'class2', 'class3', 'class4', 'class5', 'class6', 'class7', 'class8'];
+
+  useEffect(() => {
+    const auth = getAuth();
+    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+      setUser(currentUser);
+      if (currentUser) {
         fetchTeachers();
+      } else {
+        Alert.alert('Error', 'User not authenticated');
+      }
+    });
 
-        const classList = ['Nursery', 'Prep', 'Class 1', 'Class 2', 'Class 3', 'Class 4', 'Class 5', 'Class 6', 'Class 7', 'Class 8'];
-        setClasses(classList);
-    }, []);
+    return () => unsubscribe();
+  }, []);
 
-    const assignClassToTeacher = async () => {
-        if (selectedTeacher && selectedClass) {
-            await firestore().collection('teachers').doc(selectedTeacher).update({ class: selectedClass });
-            alert('Class assigned successfully');
-        } else {
-            alert('Please select both teacher and class');
-        }
-    };
+  const fetchTeachers = async () => {
+    try {
+      const teachersCollection = collection(firestore, 'teachers');
+      const querySnapshot = await getDocs(teachersCollection);
+      const teachersList = querySnapshot.docs.map(docSnapshot => ({
+        id: docSnapshot.id,
+        ...docSnapshot.data(),
+      }));
+      setTeachers(teachersList);
+    } catch (error) {
+      console.error('Error fetching teachers:', error.message);
+      Alert.alert('Error', 'Failed to fetch teachers');
+    }
+  };
 
-    return (
-        <View style={styles.container}>
-            <Text style={styles.title}>Manage Teachers</Text>
-            <Picker
-                selectedValue={selectedTeacher}
-                onValueChange={(itemValue) => setSelectedTeacher(itemValue)}>
-                <Picker.Item label="Select Teacher" value="" />
-                {teachers.map((teacher) => (
-                    <Picker.Item key={teacher.id} label={teacher.name} value={teacher.id} />
-                ))}
-            </Picker>
-            <Picker
-                selectedValue={selectedClass}
-                onValueChange={(itemValue) => setSelectedClass(itemValue)}>
-                <Picker.Item label="Select Class" value="" />
-                {classes.map((cls) => (
-                    <Picker.Item key={cls} label={cls} value={cls} />
-                ))}
-            </Picker>
-            <Button title="Assign Class" onPress={assignClassToTeacher} />
-        </View>
-    );
+  const handleAssignClass = async (teacherId, className) => {
+    try {
+      const teacherRef = doc(firestore, 'teachers', teacherId);
+      await updateDoc(teacherRef, { class: doc(firestore, 'classes', className) });
+      Alert.alert('Success', `Class ${className} assigned to teacher ${teacherId}`);
+      fetchTeachers();
+    } catch (error) {
+      console.error('Error assigning class:', error.message);
+      Alert.alert('Error', 'Failed to assign class');
+    }
+  };
+
+  const handleRemoveClass = async (teacherId) => {
+    try {
+      const teacherRef = doc(firestore, 'teachers', teacherId);
+      await updateDoc(teacherRef, { class: null });
+      Alert.alert('Success', `Class removed from teacher ${teacherId}`);
+      fetchTeachers();
+    } catch (error) {
+      console.error('Error removing class:', error.message);
+      Alert.alert('Error', 'Failed to remove class');
+    }
+  };
+
+  const handleToggleExpand = (teacherId) => {
+    setExpandedTeacher(expandedTeacher === teacherId ? null : teacherId);
+  };
+
+  if (!user) {
+    return <Text>Loading...</Text>;
+  }
+
+  return (
+    <PaperProvider>
+      <ScrollView style={styles.container}>
+        <Text style={styles.header}>Manage Teachers</Text>
+        {teachers.map((teacher) => (
+          <List.Section style={styles.options} key={teacher.id} title={`${teacher.id}`}>
+            <List.Accordion
+              title={teacher.class ? `Assigned Class: ${teacher.class.id}` : 'No Class Assigned'}
+              expanded={expandedTeacher === teacher.id}
+              onPress={() => handleToggleExpand(teacher.id)}
+            >
+              {classes.map((className) => (
+                <List.Item
+                  key={className}
+                  title={className}
+                  onPress={() => handleAssignClass(teacher.id, className)}
+                />
+              ))}
+              <List.Item
+                title="Remove Class"
+                onPress={() => handleRemoveClass(teacher.id)}
+                titleStyle={{ color: 'red' }}
+              />
+            </List.Accordion>
+          </List.Section>
+        ))}
+      </ScrollView>
+    </PaperProvider>
+  );
 };
 
 const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        padding: 20,
-        backgroundColor: '#fff',
-    },
-    title: {
-        fontSize: 24,
-        marginBottom: 20,
-        textAlign: 'center',
-    },
+  container: {
+    flex: 1,
+    padding: 20,
+    backgroundColor: '#f8f9fa',
+  },
+  options:{
+    backgroundColor:'#E2E2E2'
+
+  },
+  header: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    marginBottom: 20,
+    textAlign: 'center',
+  },
 });
 
 export default ManageTeachers;
